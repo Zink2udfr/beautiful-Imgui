@@ -1,2 +1,3 @@
-# beautiful-Imgui
-A Beautiful Imgui For Your Project
+# How to use!
+
+How to use the beautiful imgui on your project 🚀
