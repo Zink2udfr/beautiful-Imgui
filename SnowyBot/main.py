@@ -1,22 +1,48 @@
-import discord, json, os, asyncio
+import os
+import json
+import asyncio
+from pathlib import Path
+from typing import Any
+
+import discord
 from discord.ext import commands
+
+# Local imports
 from cogs.tickets import TicketButtonView, TicketEmbed, CloseButton
 from cogs.staff import ApplyButton
 from cogs.embeds import BuyBtns, rolesdropdwn
 from cogs.accountget import InventoryButton
 
-with open('assets/config/config.json', 'r') as f:
-    config = json.load(f)
+# --- Configuration Loading ---
+def load_json_config(path: Path) -> Any:
+    try:
+        with path.open('r', encoding='utf-8') as f:
+            return json.load(f)
+    except FileNotFoundError:
+        print(f"Config file not found: {path}")
+        raise
+    except json.JSONDecodeError as e:
+        print(f"Error decoding JSON from {path}: {e}")
+        raise
 
-with open('assets/config/emojis.json', 'r') as f:
-    emoji = json.load(f)
+CONFIG_PATH = Path('assets/config/config.json')
+EMOJI_PATH = Path('assets/config/emojis.json')
 
+config = load_json_config(CONFIG_PATH)
+emoji = load_json_config(EMOJI_PATH)
 
-class stayAlive(commands.Bot):
-    def __init__(self):
+# --- Discord Bot Definition ---
+class StayAliveBot(commands.Bot):
+    def __init__(self) -> None:
         intents = discord.Intents.all()
-        super().__init__(command_prefix=commands.when_mentioned_or('?'), intents=intents, help_command=None)
+        super().__init__(
+            command_prefix=commands.when_mentioned_or('?'),
+            intents=intents,
+            help_command=None
+        )
+
     async def setup_hook(self) -> None:
+        # Register persistent views, required for buttons/dropdowns to work after restart
         self.add_view(TicketEmbed())
         self.add_view(TicketButtonView())
         self.add_view(BuyBtns())
@@ -25,24 +51,32 @@ class stayAlive(commands.Bot):
         self.add_view(InventoryButton([], [], []))
         self.add_view(CloseButton([], []))
 
-client = stayAlive()
+# --- Main Execution Logic ---
+
+bot = StayAliveBot()
 os.environ['PYTHONDONTWRITEBYTECODE'] = '1'
 
-@client.event
+@bot.event
 async def on_ready():
-    await client.change_presence(status=discord.Status.dnd, activity=discord.Activity(type=discord.ActivityType.watching, name=f"{config['status']}"))
-    print(f'Logged in as {client.user}')
-    await client.tree.sync()
+    await bot.change_presence(
+        status=discord.Status.dnd,
+        activity=discord.Activity(
+            type=discord.ActivityType.watching,
+            name=f"{config.get('status', 'the server')}"
+        )
+    )
+    print(f'Logged in as {bot.user}')
+    await bot.tree.sync()
 
-
-async def load():
-    for filename in os.listdir('./cogs'):
-        if filename.endswith('.py'):
-            await client.load_extension(f'cogs.{filename[:-3]}')
+async def load_cogs():
+    cogs_path = Path('./cogs')
+    for file in cogs_path.glob('*.py'):
+        await bot.load_extension(f'cogs.{file.stem}')
 
 async def main():
-    async with client:
-        await load()
-        await client.start(config['botToken'])
+    async with bot:
+        await load_cogs()
+        await bot.start(config['botToken'])
 
-asyncio.run(main())
+if __name__ == '__main__':
+    asyncio.run(main())
